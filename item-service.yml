@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: item-service                       # Changed from wic-service
+
+  # NEW: fetch config from config-server on startup
+  config:
+    import: configserver:http://localhost:8888
+
   datasource:
     url: jdbc:postgresql://localhost:5432/item_db   # Changed from wic_db
     username: postgres
@@ -111,7 +116,7 @@ logging:
 
     # LAYER 1 ADDITION: your own packages at DEBUG so your log.debug() calls
     # actually print. Without this, the root level (INFO by default) will
-    # silently swallow all your log.debug(...) lines.
+    # silently swallow all your log.debug() lines.
     com.walmart.item: DEBUG
     com.walmart.item.client.WicClient: DEBUG        # Feign request/response logs
 
