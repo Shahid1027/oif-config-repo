@@ -72,5 +72,5 @@ management:
     tracing:
       endpoint: http://localhost:9411/api/v2/spans
 
-wic:
-  message: "Hello from GitHub v2"
+#wic:
+ # message: "Hello from GitHub v2"
