@@ -1,1 +1,81 @@
-# WIC Service config
+server:
+  port: 8082
+
+spring:
+  application:
+    name: wic-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/wic_db
+    username: postgres
+    password: user
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # NAYA - Redis Cache Config
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 5000ms
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000
+      cache-null-values: false
+
+  # LAYER 5: OAuth2 Resource Server — validate JWTs from auth-service
+  #
+  # Using issuer-uri (not jwk-set-uri) because:
+  #   - issuer-uri validates the "iss" claim in the JWT
+  #   - issuer-uri auto-discovers the JWKS URI from
+  #     http://localhost:9000/.well-known/openid-configuration
+  #   - jwk-set-uri only fetches keys; it does NOT validate "iss"
+  #
+  # NOTE: If auth-service is not running when wic-service starts,
+  # startup will FAIL with "Could not fetch JWKS". Start auth-service
+  # first, then wic-service.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9000
+
+# Eureka Client Config
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+# Logging
+logging:
+  level:
+    org.springframework.data.redis: DEBUG
+    org.springframework.cache: DEBUG
+    io.lettuce: INFO
+    com.walmart.wic.config: DEBUG
+    com.walmart.wic: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
+    # OAuth2 resource server debug (add if you want to trace token validation)
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.oauth2.jwt: DEBUG
+
+# LAYER 4: Distributed Tracing
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
