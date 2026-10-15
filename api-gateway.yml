@@ -12,9 +12,7 @@ spring:
   application:
     name: api-gateway
 
-  # NEW: fetch config from config-server on startup
-  config:
-    import: configserver:http://localhost:8888
+
 
   # =========================================================
   # LAYER 5: OAuth2 Configuration
