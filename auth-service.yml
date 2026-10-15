@@ -1,0 +1,66 @@
+# =========================================================
+# SERVER
+# Auth-service ka apna port. Baaki services
+# gateway (8080), item (8081), wic (8082), eureka (8761).
+# Auth alag port pe — 9000.
+#http://localhost:9000/oauth2/jwks
+# =========================================================
+server:
+  port: 9000
+
+# =========================================================
+# SPRING
+# =========================================================
+spring:
+
+  # App ka naam — Eureka me is naam se register hoga
+  application:
+    name: auth-service
+
+  # -------------------------------------------------------
+  # DATASOURCE — SAME DB as wic-service (Option A)
+  # Users wic_db me hi rahenge, koi migration nahi.
+  # Auth-service bhi usi table ko padhe/le.
+  # Registered clients bhi ab isi DB me rahenge.
+  # -------------------------------------------------------
+  datasource:
+    url: jdbc:postgresql://localhost:5432/wic_db
+    username: postgres
+    password: user
+    driver-class-name: org.postgresql.Driver
+
+  # -------------------------------------------------------
+  # JPA / HIBERNATE
+  # ddl-auto: update → table auto update if entity changes
+  # show-sql → SQL queries console pe print
+  # -------------------------------------------------------
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+# =========================================================
+# EUREKA CLIENT
+# Auth-service Eureka pe register hoga, taaki gateway
+# aur resource servers use discover kar sakein.
+# =========================================================
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+# =========================================================
+# LOGGING
+# OAuth2 aur Spring Security ka verbose log —
+# dev me helpful.
+# =========================================================
+logging:
+  level:
+    org.springframework.security: INFO
+    org.springframework.security.oauth2: DEBUG
