@@ -17,9 +17,7 @@ spring:
   application:
     name: auth-service
 
-  # NEW: fetch config from config-server on startup
-  config:
-    import: configserver:http://localhost:8888
+
 
   # -------------------------------------------------------
   # DATASOURCE — SAME DB as wic-service (Option A)
