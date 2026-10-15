@@ -1,0 +1,125 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: item-service                       # Changed from wic-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/item_db   # Changed from wic_db
+    username: postgres
+    password: user
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+
+# OLD config - now commented out because we no longer use hardcoded URL
+# wic:
+#   service:
+#     url: http://localhost:8082
+
+# LAYER 1 ADDITION: Feign client logging.
+# Why? Feign is a declarative interface — you cannot put log.info() inside it.
+# Instead, Feign has its own built-in logger. This turns it on.
+# Levels: NONE (default) | BASIC (method+URL+status) | HEADERS (+headers) | FULL (+body).
+# FULL is very verbose — keep it in dev, switch to BASIC in prod.
+feign:
+  client:
+    config:
+      default:
+        loggerLevel: full
+
+# New - Eureka Client config
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka,http://localhost:8762/eureka    # Eureka Server URLs (both peers)
+  instance:
+    prefer-ip-address: true                        # Register with IP instead of hostname
+
+# Resilience4j Config
+resilience4j:
+
+  # Circuit Breaker - failing service ko block karta hai
+  circuitbreaker:
+    instances:
+      wicService:
+        slidingWindowSize: 10                       # Last 10 calls track karo
+        minimumNumberOfCalls: 5                     # Kam se kam 5 calls ke baad decision
+        failureRateThreshold: 50                    # 50% fail ho gayi toh OPEN
+        waitDurationInOpenState: 30s                # 30 sec tak OPEN rahe
+        permittedNumberOfCallsInHalfOpenState: 3    # HALF-OPEN me 3 test calls
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+  # Time Limiter - slow service pe zyada wait mat karo
+  timelimiter:
+    instances:
+      wicService:
+        timeoutDuration: 3s                         # 3 sec me response na aaye toh fail
+        cancelRunningFuture: true                   # Timeout hone pe running call cancel karo
+
+  # Rate Limiter - Token Bucket type
+  ratelimiter:
+    instances:
+      wicService:
+        limitForPeriod: 3                           # 3 requests allowed per period
+        limitRefreshPeriod: 10s                     # Period = 10 sec (har 10 sec me refill)
+        timeoutDuration: 0                          # No wait - agar token nahi hai toh direct reject
+
+  # Bulkhead - Semaphore type (concurrent calls limit karta hai)
+  bulkhead:
+    instances:
+      wicService:
+        maxConcurrentCalls: 10                      # Ek saath max 10 calls allowed
+        maxWaitDuration: 0ms                        # Slot nahi hai toh direct reject
+
+  # Retry - temporary failure pe dobara try karo
+  retry:
+    instances:
+      wicService:
+        maxAttempts: 3                              # Total 3 attempts (1 original + 2 retries)
+        waitDuration: 4s                            # Har retry ke beech 4 sec wait
+        retryExceptions:                            # Sirf ye exceptions pe retry karo
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - feign.RetryableException
+        ignoreExceptions:                           # In exceptions pe retry mat karo
+          - feign.FeignException$Forbidden          # 403 - auth issue, retry waste
+          - feign.FeignException$Unauthorized       # 401 - token issue, retry waste
+
+# Logging - Resilience4j ke events dekhne ke liye
+logging:
+  level:
+    io.github.resilience4j: DEBUG
+    io.github.resilience4j.circuitbreaker: DEBUG
+    io.github.resilience4j.ratelimiter: DEBUG
+    io.github.resilience4j.bulkhead: DEBUG
+    io.github.resilience4j.retry: DEBUG
+    io.github.resilience4j.timelimiter: DEBUG
+    com.netflix.discovery: DEBUG                    # Eureka client logging (for debugging)
+    org.springframework.cloud.loadbalancer: DEBUG   # LoadBalancer logging (for debugging)
+
+    # Hibernate SQL logging
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+    # LAYER 1 ADDITION: your own packages at DEBUG so your log.debug() calls
+    # actually print. Without this, the root level (INFO by default) will
+    # silently swallow all your log.debug(...) lines.
+    com.walmart.item: DEBUG
+    com.walmart.item.client.WicClient: DEBUG        # Feign request/response logs
+
+# LAYER 4: Distributed Tracing (Micrometer + Brave + Zipkin)
+management:
+  tracing:
+    sampling:
+      probability: 1.0    # 100% requests traced (use 0.1 for 10% in prod)
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
