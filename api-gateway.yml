@@ -1,0 +1,174 @@
+# =========================================================
+# API GATEWAY
+# Single entry point for all client requests.
+# Client ko sirf ye port pata hai. Baaki services (item, wic)
+# Eureka ke through discover hote hain.
+# =========================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # =========================================================
+  # LAYER 5: OAuth2 Configuration
+  # Gateway acts as BOTH:
+  #   1. OAuth2 Client — user login via auth-service
+  #      (Authorization Code flow)
+  #   2. OAuth2 Resource Server — validates Bearer tokens
+  #      on API routes
+  # =========================================================
+  security:
+    oauth2:
+
+      # -------------------------------------------------------
+      # CLIENT REGISTRATION
+      # Tells the gateway how to talk to auth-service for login.
+      # When user hits a protected route with no session,
+      # gateway redirects to auth-service /oauth2/authorize,
+      # auth-service logs them in, and redirects back with a
+      # code. Gateway exchanges the code for tokens at
+      # /oauth2/token, and stores them in session.
+      # -------------------------------------------------------
+      client:
+        registration:
+          oif-client:
+            provider: auth-service
+            client-id: oif-client
+            client-secret: secret
+            authorization-grant-type: authorization_code
+            # {baseUrl} = http://localhost:8080
+            # {registrationId} = oif-client
+            # final: http://localhost:8080/login/oauth2/code/oif-client
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid, profile, read, write
+        provider:
+          auth-service:
+            # Spring uses this to auto-discover the OAuth2
+            # endpoints from auth-service's
+            # /.well-known/openid-configuration
+            issuer-uri: http://localhost:9000
+
+      # -------------------------------------------------------
+      # RESOURCE SERVER
+      # Tells the gateway where to fetch auth-service's public
+      # key (JWKS) so it can verify incoming Bearer tokens.
+      # -------------------------------------------------------
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9000/oauth2/jwks
+
+  # =========================================================
+  # SPRING CLOUD GATEWAY ROUTES
+  # =========================================================
+  cloud:
+    gateway:
+
+      # ---------------------------------------------------
+      # DEFAULT FILTERS  👈 NEW — THIS IS THE FIX
+      # TokenRelay takes the OAuth2 access token from the
+      # user's session (stored by oauth2Login) and adds it
+      # as an "Authorization: Bearer <token>" header on
+      # every outgoing request to downstream services.
+      #
+      # Without this, Gateway authenticates the user but
+      # forwards requests WITHOUT the token, so WIC Service
+      # returns 401 Unauthorized.
+      # ---------------------------------------------------
+      default-filters:
+        - TokenRelay
+
+      routes:
+
+        # -------------------------------------------------
+        # ITEM-SERVICE — main endpoints
+        # Match: /api/items/**  →  lb://item-service
+        # Example: GET /api/items/12345
+        # -------------------------------------------------
+        - id: item-service
+          uri: lb://item-service
+          predicates:
+            - Path=/api/items/**
+
+        # -------------------------------------------------
+        # ITEM-SERVICE — demo / N+1 endpoints
+        # Match: /api/demo/items/**  →  lb://item-service
+        # Example: GET /api/demo/items/by-department?department=Infant
+        #          GET /api/demo/items/by-department/batch-api
+        # -------------------------------------------------
+        - id: item-service-demo
+          uri: lb://item-service
+          predicates:
+            - Path=/api/demo/items/**
+
+        # -------------------------------------------------
+        # WIC-SERVICE — WIC state endpoints
+        # Match: /api/wic/**  →  lb://wic-service
+        # -------------------------------------------------
+        - id: wic-service
+          uri: lb://wic-service
+          predicates:
+            - Path=/api/wic/**
+
+        # -------------------------------------------------
+        # AUTH ENDPOINTS (still inside wic-service)
+        # Match: /api/auth/**  →  lb://wic-service
+        # NOTE: uri points to wic-service. When auth moves to a
+        # separate auth-service later, only change the uri here.
+        # -------------------------------------------------
+        - id: auth-service
+          uri: lb://wic-service
+          predicates:
+            - Path=/api/auth/**
+
+      # ---------------------------------------------------
+      # Discovery Locator (optional shortcut)
+      # Automatically creates a route for every service
+      # registered in Eureka: /<service-id>/** → lb://<service-id>
+      # lower-case-service-id: URLs lowercase rakhta hai.
+      # Manual routes upar still take priority.
+      # ---------------------------------------------------
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+# =========================================================
+# EUREKA CLIENT
+# Gateway Eureka se services discover karta hai.
+# lb://item-service ka matlab: Eureka se poochho "item-service
+# kahan chal rahi hai?" aur wahan route karo.
+# =========================================================
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+  instance:
+    prefer-ip-address: true    # register with IP, not hostname
+
+# =========================================================
+# LOGGING
+# Gateway + LoadBalancer ke DEBUG/TRACE logs —
+# routing decisions aur instance selection console me
+# explicitly dikhega.
+# =========================================================
+logging:
+  level:
+    # Gateway ka internal routing flow
+    org.springframework.cloud.gateway: DEBUG
+
+    # LoadBalancer ka decision log (kaunsa instance chuna)
+    org.springframework.cloud.loadbalancer: TRACE
+    org.springframework.cloud.client.loadbalancer: TRACE
+
+    # RoundRobin balancer ka internal selection
+    org.springframework.cloud.loadbalancer.core.RoundRobinLoadBalancer: TRACE
+
+    # Reactor Netty client logs (optional, helpful for outbound calls)
+    reactor.netty.http.client: INFO
+
+    # LAYER 5: OAuth2 flow logs (helpful to debug login)
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.oauth2.client: DEBUG
