@@ -5,9 +5,6 @@ spring:
   application:
     name: item-service                       # Changed from wic-service
 
-  # NEW: fetch config from config-server on startup
-  config:
-    import: configserver:http://localhost:8888
 
   datasource:
     url: jdbc:postgresql://localhost:5432/item_db   # Changed from wic_db
