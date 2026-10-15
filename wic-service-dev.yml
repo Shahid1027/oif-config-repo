@@ -32,16 +32,6 @@ spring:
       cache-null-values: false
 
   # LAYER 5: OAuth2 Resource Server — validate JWTs from auth-service
-  #
-  # Using issuer-uri (not jwk-set-uri) because:
-  #   - issuer-uri validates the "iss" claim in the JWT
-  #   - issuer-uri auto-discovers the JWKS URI from
-  #     http://localhost:9000/.well-known/openid-configuration
-  #   - jwk-set-uri only fetches keys; it does NOT validate "iss"
-  #
-  # NOTE: If auth-service is not running when wic-service starts,
-  # startup will FAIL with "Could not fetch JWKS". Start auth-service
-  # first, then wic-service.
   security:
     oauth2:
       resourceserver:
@@ -66,13 +56,15 @@ logging:
     com.walmart.wic: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
-
-    # OAuth2 resource server debug (add if you want to trace token validation)
     org.springframework.security.oauth2: DEBUG
     org.springframework.security.oauth2.jwt: DEBUG
 
-# LAYER 4: Distributed Tracing
+# LAYER 4: Distributed Tracing + Actuator
 management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
   tracing:
     sampling:
       probability: 1.0
