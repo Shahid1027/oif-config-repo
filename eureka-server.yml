@@ -5,9 +5,7 @@ spring:
   application:
     name: eureka-server
 
-  # NEW: fetch config from config-server on startup
-  config:
-    import: configserver:http://localhost:8888
+
 
 eureka:
   client:
